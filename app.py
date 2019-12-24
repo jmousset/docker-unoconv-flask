@@ -14,13 +14,21 @@ api = Api(app)
 
 class UnoconvConverter(object):
 
-    def convert(self, file, input_format, output_format):
-        temp_path = tempfile.NamedTemporaryFile(suffix=".%s" % (input_format, ))
+    def convert(self, file, input_format, output_format, unoconv_args):
+        temp_path = tempfile.NamedTemporaryFile(suffix=".%s" % (
+            input_format, ))
         temp_path.write(file)
         temp_path.flush()
 
         unoconv_bin = 'unoconv'
-        command = [unoconv_bin, '--stdout', '-e', 'UseLosslessCompression=false', '-e', 'ReduceImageResolution=false', '--format', output_format, temp_path.name]
+        command = [unoconv_bin, '--stdout',
+                '-e', 'UseLosslessCompression=false',
+                '-e', 'ReduceImageResolution=false',
+                '--format', output_format]
+        if unoconv_args:
+            for item in unoconv_args.items():
+                command.extend(list(item))
+        command.append(temp_path.name)
         p = subprocess.Popen(command,
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -38,14 +46,18 @@ class UnoconvResource(Resource):
 
     def post(self, output_format):
         file = request.files['file']
+        unoconv_args = request.form or {}
+
         extension = os.path.splitext(file.filename)[1][1:]
         converter = UnoconvConverter()
 
-        raw_bytes = converter.convert(file.read(), extension, output_format)
+        raw_bytes = converter.convert(file.read(), extension, output_format,
+                unoconv_args)
         response = make_response(raw_bytes)
         response.headers['Content-Type'] = "application/octet-stream"
-        response.headers['Content-Disposition'] = "inline; filename=converted.%s" % (output_format, )
+        response.headers['Content-Disposition'] = \
+                "inline; filename=converted.%s" % (output_format, )
         return response
 
-api.add_resource(UnoconvResource, '/unoconv/<string:output_format>/')
 
+api.add_resource(UnoconvResource, '/unoconv/<string:output_format>/')
